@@ -22,5 +22,8 @@
   "meld-encrypt",
   "obsidian-git",
   "obsidian-icons-plugin",
-  "iconic"
+  "iconic",
+  "buttons",
+  "obsidian-excalidraw-plugin",
+  "oz-image-plugin"
 ]

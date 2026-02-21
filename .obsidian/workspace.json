@@ -1,14 +1,14 @@
 {
   "main": {
-    "id": "77e85f3f970997b1",
+    "id": "5324373015726ba8",
     "type": "split",
     "children": [
       {
-        "id": "882a18c34cbbe9df",
+        "id": "0c0e6183fcf4fd3c",
         "type": "tabs",
         "children": [
           {
-            "id": "47745ecb0a03058c",
+            "id": "474594178fcb6efe",
             "type": "leaf",
             "state": {
               "type": "empty",
@@ -72,7 +72,7 @@
             }
           },
           {
-            "id": "0f4bbfe67db30f76",
+            "id": "a837b7a04cfdaf86",
             "type": "leaf",
             "state": {
               "type": "mk-path-view",
@@ -211,6 +211,14 @@
   },
   "left-ribbon": {
     "hiddenItems": {
+      "homepage:Open homepage": false,
+      "meld-encrypt:New encrypted note": false,
+      "meld-encrypt:Lock and Close all open encrypted notes": false,
+      "meld-encrypt:Convert to or from an Encrypted note": false,
+      "meld-encrypt:Encrypt Selection": false,
+      "meld-encrypt:Decrypt at Cursor": false,
+      "obsidian-git:Open Git source control": false,
+      "iconic:Open rulebook": false,
       "bases:Create new base": false,
       "markdown-importer:Open format converter": false,
       "audio-recorder:Start/stop recording": false,
@@ -227,7 +235,7 @@
       "local-llm-helper:LLM Helper": false
     }
   },
-  "active": "47745ecb0a03058c",
+  "active": "474594178fcb6efe",
   "lastOpenFiles": [
     "Tags",
     "Journal/2025-02-17.md",

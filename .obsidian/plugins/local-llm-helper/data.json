@@ -12,8 +12,10 @@
   "responseFormatting": false,
   "responseFormatPrepend": "``` LLM Helper - generated response \n\n",
   "responseFormatAppend": "\n\n```",
-  "lastVersion": "2.3.1",
+  "lastVersion": "2.3.3",
   "embeddingModelName": "mxbai-embed-large",
   "braveSearchApiKey": "",
-  "openAIApiKey": "lm-studio"
+  "openAIApiKey": "lm-studio",
+  "searchProvider": "tavily",
+  "tavilyApiKey": ""
 }

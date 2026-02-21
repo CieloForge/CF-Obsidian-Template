@@ -27504,6 +27504,31 @@ function appendTags(editor, tags, cursorPosition) {
 var import_obsidian2 = require("obsidian");
 var CHANGELOGS = [
   {
+    version: "2.3.3",
+    date: "2025-02",
+    changes: `
+**Bug Fixes**
+- Fixed API key not being sent in chat requests (streaming, non-streaming, and chat modal)
+- Better error messages for authentication failures (401)
+
+**Improvements**
+- Added CORS note to streaming setting description
+`
+  },
+  {
+    version: "2.3.2",
+    date: "2025-02",
+    changes: `
+**Bug Fixes**
+- Fixed embedding model changes not taking effect until plugin restart
+- Fixed settings not saving when closing settings tab quickly
+
+**New**
+- Tavily search provider support (alternative to Brave)
+- Search provider picker in settings
+`
+  },
+  {
     version: "2.3.1",
     date: "2024-02",
     changes: `
@@ -40423,6 +40448,7 @@ var RAGManager = class {
       settings.embeddingModelName,
       settings.serverAddress
     );
+    this.vectorStore.embeddings = this.embeddings;
     if (modelChanged || serverChanged) {
       console.log("\u26A0\uFE0F RAGManager: Embedding settings changed. Re-index recommended for best results.");
     }
@@ -41112,7 +41138,9 @@ var DEFAULT_SETTINGS = {
   lastVersion: "0.0.0",
   embeddingModelName: "mxbai-embed-large",
   braveSearchApiKey: "",
-  openAIApiKey: "lm-studio"
+  openAIApiKey: "lm-studio",
+  searchProvider: "tavily",
+  tavilyApiKey: ""
 };
 var personasDict = {
   "default": "Default",
@@ -41593,6 +41621,14 @@ var OLLMSettingTab = class extends import_obsidian6.PluginSettingTab {
       this.plugin.saveSettings();
     }, 500);
   }
+  // Flush any pending debounced save when settings tab is closed
+  hide() {
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      this.saveTimeout = null;
+      this.plugin.saveSettings();
+    }
+  }
   display() {
     const { containerEl } = this;
     containerEl.empty();
@@ -41673,7 +41709,7 @@ var OLLMSettingTab = class extends import_obsidian6.PluginSettingTab {
       })
     );
     containerEl.createEl("h3", { text: "Output" });
-    new import_obsidian6.Setting(containerEl).setName("Streaming").setDesc("Show response word by word as it generates").addToggle(
+    new import_obsidian6.Setting(containerEl).setName("Streaming").setDesc("Show response word by word as it generates. Your server must have CORS enabled for streaming to work.").addToggle(
       (toggle) => toggle.setValue(this.plugin.settings.stream).onChange(async (value) => {
         this.plugin.settings.stream = value;
         await this.plugin.saveSettings();
@@ -41754,12 +41790,33 @@ var OLLMSettingTab = class extends import_obsidian6.PluginSettingTab {
       await this.plugin.handleDiagnostics();
     }));
     containerEl.createEl("h3", { text: "Integrations" });
-    new import_obsidian6.Setting(containerEl).setName("Brave Search API key").setDesc("Required for web search features").addText(
-      (text) => text.setPlaceholder("Enter API key").setValue(this.plugin.settings.braveSearchApiKey).onChange((value) => {
-        this.plugin.settings.braveSearchApiKey = value;
+    const searchApiKeyContainer = containerEl.createDiv();
+    const renderSearchApiKey = () => {
+      searchApiKeyContainer.empty();
+      if (this.plugin.settings.searchProvider === "brave") {
+        new import_obsidian6.Setting(searchApiKeyContainer).setName("Brave Search API key").setDesc("Required for web search features").addText(
+          (text) => text.setPlaceholder("Enter API key").setValue(this.plugin.settings.braveSearchApiKey).onChange((value) => {
+            this.plugin.settings.braveSearchApiKey = value;
+            this.debouncedSave();
+          })
+        );
+      } else {
+        new import_obsidian6.Setting(searchApiKeyContainer).setName("Tavily API key").setDesc("Required for web search features (tavily.com)").addText(
+          (text) => text.setPlaceholder("Enter API key").setValue(this.plugin.settings.tavilyApiKey).onChange((value) => {
+            this.plugin.settings.tavilyApiKey = value;
+            this.debouncedSave();
+          })
+        );
+      }
+    };
+    new import_obsidian6.Setting(containerEl).setName("Search provider").setDesc("Choose which search API to use for web and news search").addDropdown(
+      (dropdown) => dropdown.addOption("tavily", "Tavily").addOption("brave", "Brave").setValue(this.plugin.settings.searchProvider).onChange((value) => {
+        this.plugin.settings.searchProvider = value;
         this.debouncedSave();
+        renderSearchApiKey();
       })
     );
+    renderSearchApiKey();
     containerEl.createEl("h3", { text: "About" });
     new import_obsidian6.Setting(containerEl).setName("Version").setDesc(`Local LLM Helper v${this.plugin.manifest.version}`).addButton((btn) => btn.setButtonText("View changelog").onClick(() => {
       new UpdateNoticeModal(this.app, this.plugin.manifest.version).open();
@@ -41836,15 +41893,22 @@ async function processText(selectedText, iprompt, plugin) {
       modifySelectedText(plugin.settings.responseFormatPrepend);
     }
     if (plugin.settings.stream) {
+      const streamHeaders = { "Content-Type": "application/json" };
+      if (plugin.settings.openAIApiKey && plugin.settings.openAIApiKey !== "not-needed") {
+        streamHeaders["Authorization"] = `Bearer ${plugin.settings.openAIApiKey}`;
+      }
       const response = await fetch(
         `${plugin.settings.serverAddress}/v1/chat/completions`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: streamHeaders,
           body: JSON.stringify(body)
         }
       );
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error("Authentication failed (401). Check your API key in plugin settings.");
+        }
         throw new Error(
           "Error summarizing text (Fetch): " + response.statusText
         );
@@ -41901,10 +41965,14 @@ async function processText(selectedText, iprompt, plugin) {
         readChunk();
       }
     } else {
+      const reqHeaders = { "Content-Type": "application/json" };
+      if (plugin.settings.openAIApiKey && plugin.settings.openAIApiKey !== "not-needed") {
+        reqHeaders["Authorization"] = `Bearer ${plugin.settings.openAIApiKey}`;
+      }
       const response = await (0, import_obsidian6.requestUrl)({
         url: `${plugin.settings.serverAddress}/v1/chat/completions`,
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: reqHeaders,
         body: JSON.stringify(body)
       });
       const statusCode = response.status;
@@ -41932,9 +42000,12 @@ async function processText(selectedText, iprompt, plugin) {
     }
   } catch (error) {
     console.error("Error during request:", error);
-    new import_obsidian6.Notice(
-      "Error summarizing text: Check plugin console for more details!"
-    );
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (errMsg.includes("401") || errMsg.toLowerCase().includes("unauthorized")) {
+      new import_obsidian6.Notice("Authentication failed (401). Check your API key in plugin settings.");
+    } else {
+      new import_obsidian6.Notice("Error generating text. Check plugin console for details.");
+    }
   }
   if (statusBarItemEl) {
     statusBarItemEl.textContent = "LLM Helper: Ready";
@@ -42078,10 +42149,14 @@ async function processChatInput(text, personas, chatContainer, chatHistoryEl, co
       stream: false
       // Set to false for chat window
     };
+    const chatHeaders = { "Content-Type": "application/json" };
+    if (pluginSettings.openAIApiKey && pluginSettings.openAIApiKey !== "not-needed") {
+      chatHeaders["Authorization"] = `Bearer ${pluginSettings.openAIApiKey}`;
+    }
     const response = await (0, import_obsidian6.requestUrl)({
       url: `${pluginSettings.serverAddress}/v1/chat/completions`,
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: chatHeaders,
       body: JSON.stringify(body)
     });
     const statusCode = response.status;
@@ -42118,9 +42193,12 @@ async function processChatInput(text, personas, chatContainer, chatHistoryEl, co
     }
   } catch (error) {
     console.error("Error during request:", error);
-    new import_obsidian6.Notice(
-      "Error communicating with LLM Helper: Check plugin console for details!"
-    );
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (errMsg.includes("401") || errMsg.toLowerCase().includes("unauthorized")) {
+      new import_obsidian6.Notice("Authentication failed (401). Check your API key in plugin settings.");
+    } else {
+      new import_obsidian6.Notice("Error communicating with LLM server. Check plugin console for details.");
+    }
     hideThinkingIndicator(chatHistoryEl);
   }
 }
@@ -42161,39 +42239,81 @@ function updateConversationHistory(prompt, response, conversationHistory, maxCon
     conversationHistory.shift();
   }
 }
+async function tavilySearch(query, topic, plugin) {
+  const body = {
+    query,
+    topic,
+    max_results: 5,
+    search_depth: "basic",
+    include_answer: false
+  };
+  if (topic === "news") {
+    body.time_range = "day";
+  }
+  const response = await (0, import_obsidian6.requestUrl)({
+    url: "https://api.tavily.com/search",
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${plugin.settings.tavilyApiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  if (response.status !== 200) {
+    throw new Error("Tavily search failed: " + response.status);
+  }
+  const results = response.json.results;
+  return results.map(
+    (result) => `${result.title}
+${result.content}
+Source: ${result.url}
+
+`
+  ).join("");
+}
 async function processWebSearch(query, plugin) {
-  if (!plugin.settings.braveSearchApiKey) {
+  const provider = plugin.settings.searchProvider;
+  if (provider === "tavily" && !plugin.settings.tavilyApiKey) {
+    new import_obsidian6.Notice("Please set your Tavily API key in settings");
+    return;
+  }
+  if (provider === "brave" && !plugin.settings.braveSearchApiKey) {
     new import_obsidian6.Notice("Please set your Brave Search API key in settings");
     return;
   }
   new import_obsidian6.Notice("Searching the web...");
   try {
-    const response = await (0, import_obsidian6.requestUrl)({
-      url: `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5&summary=1&extra_snippets=1&text_decorations=1&result_filter=web,discussions,faq,news&spellcheck=1`,
-      method: "GET",
-      headers: {
-        "Accept": "application/json",
-        "Accept-Encoding": "gzip",
-        "X-Subscription-Token": plugin.settings.braveSearchApiKey
+    let context;
+    if (provider === "tavily") {
+      context = await tavilySearch(query, "general", plugin);
+    } else {
+      const response = await (0, import_obsidian6.requestUrl)({
+        url: `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=5&summary=1&extra_snippets=1&text_decorations=1&result_filter=web,discussions,faq,news&spellcheck=1`,
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+          "Accept-Encoding": "gzip",
+          "X-Subscription-Token": plugin.settings.braveSearchApiKey
+        }
+      });
+      if (response.status !== 200) {
+        throw new Error("Search failed: " + response.status);
       }
-    });
-    if (response.status !== 200) {
-      throw new Error("Search failed: " + response.status);
-    }
-    const searchResults = response.json.web.results;
-    const context = searchResults.map((result) => {
-      let snippets = result.extra_snippets ? "\nAdditional Context:\n" + result.extra_snippets.join("\n") : "";
-      return `${result.title}
+      const searchResults = response.json.web.results;
+      context = searchResults.map((result) => {
+        let snippets = result.extra_snippets ? "\nAdditional Context:\n" + result.extra_snippets.join("\n") : "";
+        return `${result.title}
 ${result.description}${snippets}
 Source: ${result.url}
 
 `;
-    }).join("");
+      }).join("");
+    }
     processText(
-      `Based on these comprehensive search results about "${query}":
+      `Search results for "${query}":
 
 ${context}`,
-      "You are a helpful assistant. Analyze these detailed search results and provide a thorough, well-structured response. Include relevant source citations and consider multiple perspectives if available.",
+      "Summarize these search results concisely. Use bullet points for key facts and cite sources inline as [Source](url).",
       plugin
     );
   } catch (error) {
@@ -42202,33 +42322,48 @@ ${context}`,
   }
 }
 async function processNewsSearch(query, plugin) {
+  const provider = plugin.settings.searchProvider;
+  if (provider === "tavily" && !plugin.settings.tavilyApiKey) {
+    new import_obsidian6.Notice("Please set your Tavily API key in settings");
+    return;
+  }
+  if (provider === "brave" && !plugin.settings.braveSearchApiKey) {
+    new import_obsidian6.Notice("Please set your Brave Search API key in settings");
+    return;
+  }
+  new import_obsidian6.Notice("Searching for news...");
   try {
-    const response = await (0, import_obsidian6.requestUrl)({
-      url: `https://api.search.brave.com/res/v1/news/search?q=${encodeURIComponent(query)}&count=5&search_lang=en&freshness=pd`,
-      method: "GET",
-      headers: {
-        "Accept": "application/json",
-        "Accept-Encoding": "gzip",
-        "X-Subscription-Token": plugin.settings.braveSearchApiKey
+    let context;
+    if (provider === "tavily") {
+      context = await tavilySearch(query, "news", plugin);
+    } else {
+      const response = await (0, import_obsidian6.requestUrl)({
+        url: `https://api.search.brave.com/res/v1/news/search?q=${encodeURIComponent(query)}&count=5&search_lang=en&freshness=pd`,
+        method: "GET",
+        headers: {
+          "Accept": "application/json",
+          "Accept-Encoding": "gzip",
+          "X-Subscription-Token": plugin.settings.braveSearchApiKey
+        }
+      });
+      if (response.status !== 200) {
+        throw new Error("News search failed: " + response.status);
       }
-    });
-    if (response.status !== 200) {
-      throw new Error("News search failed: " + response.status);
-    }
-    const newsResults = response.json.results;
-    const context = newsResults.map(
-      (result) => `${result.title}
+      const newsResults = response.json.results;
+      context = newsResults.map(
+        (result) => `${result.title}
 ${result.description}
 Source: ${result.url}
 Published: ${result.published_time}
 
 `
-    ).join("");
+      ).join("");
+    }
     processText(
-      `Based on these news results about "${query}":
+      `News results for "${query}":
 
 ${context}`,
-      "Analyze these news results and provide a comprehensive summary with key points and timeline. Include source citations.",
+      "Summarize these news results concisely. List key developments as bullet points and cite sources inline as [Source](url).",
       plugin
     );
   } catch (error) {
