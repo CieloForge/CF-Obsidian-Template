@@ -4,11 +4,11 @@
     "type": "split",
     "children": [
       {
-        "id": "0c0e6183fcf4fd3c",
+        "id": "ed39dec065fc5fad",
         "type": "tabs",
         "children": [
           {
-            "id": "474594178fcb6efe",
+            "id": "f5567113cfd55820",
             "type": "leaf",
             "state": {
               "type": "empty",
@@ -72,7 +72,7 @@
             }
           },
           {
-            "id": "a837b7a04cfdaf86",
+            "id": "365442e7ce6871d1",
             "type": "leaf",
             "state": {
               "type": "mk-path-view",
@@ -211,14 +211,6 @@
   },
   "left-ribbon": {
     "hiddenItems": {
-      "homepage:Open homepage": false,
-      "meld-encrypt:New encrypted note": false,
-      "meld-encrypt:Lock and Close all open encrypted notes": false,
-      "meld-encrypt:Convert to or from an Encrypted note": false,
-      "meld-encrypt:Encrypt Selection": false,
-      "meld-encrypt:Decrypt at Cursor": false,
-      "obsidian-git:Open Git source control": false,
-      "iconic:Open rulebook": false,
       "bases:Create new base": false,
       "markdown-importer:Open format converter": false,
       "audio-recorder:Start/stop recording": false,
@@ -230,12 +222,21 @@
       "command-palette:Open command palette": false,
       "omnisearch:Omnisearch": false,
       "obsidian-importer:Open Importer": false,
-      "table-editor-obsidian:Advanced Tables Toolbar": false,
       "obsidian-kanban:Create new board": false,
-      "local-llm-helper:LLM Helper": false
+      "local-llm-helper:LLM Helper": false,
+      "table-editor-obsidian:Advanced Tables Toolbar": false,
+      "homepage:Open homepage": false,
+      "meld-encrypt:New encrypted note": false,
+      "meld-encrypt:Lock and Close all open encrypted notes": false,
+      "meld-encrypt:Convert to or from an Encrypted note": false,
+      "meld-encrypt:Encrypt Selection": false,
+      "meld-encrypt:Decrypt at Cursor": false,
+      "obsidian-git:Open Git source control": false,
+      "iconic:Open rulebook": false,
+      "obsidian-excalidraw-plugin:New drawing": false
     }
   },
-  "active": "474594178fcb6efe",
+  "active": "f5567113cfd55820",
   "lastOpenFiles": [
     "Tags",
     "Journal/2025-02-17.md",
